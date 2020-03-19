@@ -1,4 +1,4 @@
-HSImodelPredict <- function(modelHSI
+HSImodelPredict <- function(modelHSI,
                             modLayers,
                             currentTime,
                             pathData,
