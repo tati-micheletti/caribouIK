@@ -119,23 +119,23 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
         }
         
         sim$modLayers[["Initial"]] <- Cache(usefun::getLayers, currentTime = start(sim),
-                                                                        startTime = start(sim),
-                                                                        endTime = end(sim),
-                                                                        cohortData = mod$cohortData, # Has age info per pixel group
-                                                                        pixelGroupMap = mod$pixelGroupMap,
-                                                                        recoveryTime = P(sim)$recoveryTime,
-                                                                        listSACaribou = sim$listSACaribou,
-                                                                        anthropogenicLayer = sim$anthropogenicLayer,
-                                                                        roadDensity = sim$roadDensity,
-                                                                        waterRaster = sim$waterRaster,
-                                                                        isRSF = TRUE,
-                                                                        decidousSp = P(sim)$decidousSp,
-                                                                        oldBurnTime = P(sim)$oldBurnTime,
-                                                                        elevation = sim$Elevation,
-                                                                        vrug = sim$Vrug,
-                                                                        LCC05 = sim$LCC05,
-                                                                        reclassLCC05 = sim$reclassLCC05,
-                                                                        rasterToMatch = sim$rasterToMatch,
+                                            startTime = start(sim),
+                                            endTime = end(sim),
+                                            cohortData = mod$cohortData, # Has age info per pixel group
+                                            pixelGroupMap = mod$pixelGroupMap,
+                                            recoveryTime = P(sim)$recoveryTime,
+                                            listSACaribou = sim$listSACaribou,
+                                            anthropogenicLayer = sim$anthropogenicLayer,
+                                            roadDensity = sim$roadDensity,
+                                            waterRaster = sim$waterRaster,
+                                            isRSF = TRUE,
+                                            decidousSp = P(sim)$decidousSp,
+                                            oldBurnTime = P(sim)$oldBurnTime,
+                                            elevation = sim$Elevation,
+                                            vrug = sim$Vrug,
+                                            LCC05 = sim$LCC05,
+                                            reclassLCC05 = sim$reclassLCC05,
+                                            rasterToMatch = sim$rasterToMatch,
                                             userTags = c("modLayersInitial", "caribouIK", "getLayers"), 
                                             omitArgs = "useCache")
       }
@@ -148,9 +148,9 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
     },
     fittingModel = {
       sim$modelHSI <- Cache(HSImodelFit, modLayers = 
-                                    sim$modLayers[["Initial"]][[paste0("Year", time(sim))]], 
-                                  #TODO this should not be a list of time. Need to modify in prev fun 
-                                  IKLayer = sim$IKLayer, subsetForModel = P(sim)$subsetForModel,
+                              sim$modLayers[["Initial"]][[paste0("Year", time(sim))]], 
+                            #TODO this should not be a list of time. Need to modify in prev fun 
+                            IKLayer = sim$IKLayer, subsetForModel = P(sim)$subsetForModel,
                             userTags = c("modelHSI", paste0("subset:", P(sim)$subsetForModel), "goal:fitting"))
     },
     gettingData = {
@@ -162,6 +162,12 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
       
       if (any(is.null(mod$pixelGroupMap), is.null(mod$cohortData))) {
         params(sim)$caribouIK$.useDummyData <- TRUE
+      }
+      # schedule future event(s)
+      sim <- scheduleEvent(sim, time(sim) + P(sim)$predictionInterval, "caribouIK", "gettingData")
+      if (P(sim)$predictLastYear){
+        if (all(time(sim) == start(sim), (end(sim)-start(sim)) != 0))
+          sim <- scheduleEvent(sim, end(sim), "caribouIK", "gettingData")
       }
     },
     predictingCaribou = {
@@ -214,7 +220,7 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
     plot = {
       caribouHSI <- sim$habitatSuitabilityIndex[[paste0("Year", time(sim))]]
       Plot(caribouHSI, 
-           title = "Caribou Habitat Suitability Index")
+           title = "Caribou Habitat Suitability Index", time(sim))
       
       # schedule future event(s)
       if (time(sim) != end(sim))
