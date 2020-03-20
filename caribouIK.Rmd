@@ -22,7 +22,7 @@ For help writing in R Markdown, see http://rmarkdown.rstudio.com/.
 
 ```{r module_usage}
 library(SpaDES.core)
-
+options(reproducible.useCache = TRUE)
 setPaths(modulePath = file.path(getwd(), "modules"),
          inputPath = checkPath(file.path(getwd(), "testingCaribouIK"), create = TRUE),
          cachePath = file.path(getwd(), "cache"),
