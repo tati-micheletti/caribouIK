@@ -91,7 +91,9 @@ defineModule(sim, list(
                   desc = "Stack of all dynamic layers: oldBurn, newBurn, biomassMap, roadDensity, waterRaster"),
     createsOutput(objectName = "listSACaribou", objectClass = "list", 
                   desc = paste0("List of caribou areas to predict for",
-                                " Currently the default is 3 shapefiles: Edehzhie, range planning, herds"))
+                                " Currently the default is 3 shapefiles: Edehzhie, range planning, herds")),
+    createsOutput(objectName = "habitatSuitabilityIndex", objectClass = "list", 
+                  desc = paste0("List of YearXXXX of caribou HSI predictions"))
   )
 ))
 
