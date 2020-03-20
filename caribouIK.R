@@ -18,7 +18,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = deparse(list("README.txt", "caribouIK.Rmd")),
-  reqdPkgs = list("data.table", "ggplot2", "PredictiveEcology/pemisc", "tati-micheletti/usefun", "ordinalForest"), 
+  reqdPkgs = list("data.table", "ggplot2", "PredictiveEcology/pemisc", "tati-micheletti/usefun", "ordinalForest", "PredictiveEcology/LandR"), 
   parameters = rbind(
     defineParameter("predictLastYear", "logical", TRUE, NA, NA, paste0("If last year of simulation is not multiple of",
                                                                        " predictionInterval, should it predict for the last year too?")),
@@ -37,7 +37,9 @@ defineModule(sim, list(
     defineParameter(".useCache", "character", c(".inputObjects", "init"), NA, NA,
                     desc = "Internal. Can be names of events or the whole module name; these will be cached by SpaDES"),
     defineParameter("overwriteResults", "logical", FALSE, NA, NA,
-                    desc = "Should available results be overwritten? If FALSE, existing will be returned")
+                    desc = "Should available results be overwritten? If FALSE, existing will be returned"),
+    defineParameter("subsetForModel", "logical | numeric", 50, NA, NA,
+                    desc = "Should data for the model be subsetted? If FALSE, existing will be returned")
   ),
   inputObjects = bind_rows(
     expectsInput(objectName = "waterRaster", objectClass = "RasterLayer",
@@ -114,7 +116,7 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
           sim$modLayers <- list()
         }
         
-        sim$modLayers[["Initial"]] <- usefun::getLayers(currentTime = start(sim),
+        sim$modLayers[["Initial"]] <- Cache(usefun::getLayers, currentTime = start(sim),
                                                                         startTime = start(sim),
                                                                         endTime = end(sim),
                                                                         cohortData = mod$cohortData, # Has age info per pixel group
@@ -131,7 +133,9 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
                                                                         vrug = sim$Vrug,
                                                                         LCC05 = sim$LCC05,
                                                                         reclassLCC05 = sim$reclassLCC05,
-                                                                        rasterToMatch = sim$rasterToMatch)
+                                                                        rasterToMatch = sim$rasterToMatch,
+                                            userTags = c("modLayersInitial", "caribouIK", "getLayers"), 
+                                            omitArgs = "useCache")
       }
       
       # schedule future event(s)
@@ -141,13 +145,11 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
       sim <- scheduleEvent(sim, end(sim), "caribouIK", "plot", eventPriority = .last()) #P(sim)$.plotInitialTime
     },
     fittingModel = {
-      
-      sim$modelHSI <- HSImodelFit(caribouModelsRSF = sim$caribouModelsRSF,
-                                      modLayers = sim$modLayers[["Initial"]],
-                                      currentTime = start(sim),
-                                      pathData = dataPath(sim),
-                                      pathOut = outputPath(sim))
-      
+      sim$modelHSI <- Cache(HSImodelFit, modLayers = 
+                                    sim$modLayers[["Initial"]][[paste0("Year", time(sim))]], 
+                                  #TODO this should not be a list of time. Need to modify in prev fun 
+                                  IKLayer = sim$IKLayer, subsetForModel = P(sim)$subsetForModel,
+                            userTags = c("modelHSI", paste0("subset:", P(sim)$subsetForModel), "goal:fitting"))
     },
     gettingData = {
       Require("magrittr")
@@ -168,24 +170,24 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
           sim$modLayers <- list()
         }
 
-        sim$modLayers[[paste0("Year", time(sim))]] <- usefun::getLayers(currentTime = time(sim),
-                                                                        startTime = start(sim),
-                                                                        endTime = end(sim),
-                                                                        cohortData = mod$cohortData, # Has age info per pixel group
-                                                                        pixelGroupMap = mod$pixelGroupMap,
-                                                                        recoveryTime = P(sim)$recoveryTime,
-                                                                        listSACaribou = sim$listSACaribou,
-                                                                        anthropogenicLayer = sim$anthropogenicLayer,
-                                                                        roadDensity = sim$roadDensity,
-                                                                        waterRaster = sim$waterRaster,
-                                                                        isRSF = TRUE,
-                                                                        decidousSp = P(sim)$decidousSp,
-                                                                        oldBurnTime = P(sim)$oldBurnTime,
-                                                                        elevation = sim$Elevation,
-                                                                        vrug = sim$Vrug,
-                                                                        LCC05 = sim$LCC05,
-                                                                        reclassLCC05 = sim$reclassLCC05,
-                                                                        rasterToMatch = sim$rasterToMatch)
+        sim$modLayers <- usefun::getLayers(currentTime = time(sim),
+                                           startTime = start(sim),
+                                           endTime = end(sim),
+                                           cohortData = mod$cohortData, # Has age info per pixel group
+                                           pixelGroupMap = mod$pixelGroupMap,
+                                           recoveryTime = P(sim)$recoveryTime,
+                                           listSACaribou = sim$listSACaribou,
+                                           anthropogenicLayer = sim$anthropogenicLayer,
+                                           roadDensity = sim$roadDensity,
+                                           waterRaster = sim$waterRaster,
+                                           isRSF = TRUE,
+                                           decidousSp = P(sim)$decidousSp,
+                                           oldBurnTime = P(sim)$oldBurnTime,
+                                           elevation = sim$Elevation,
+                                           vrug = sim$Vrug,
+                                           LCC05 = sim$LCC05,
+                                           reclassLCC05 = sim$reclassLCC05,
+                                           rasterToMatch = sim$rasterToMatch)
       }
       fls <- tryCatch({usefun::grepMulti(x = list.files(outputPath(sim)), patterns = c("IK", time(sim)))}, error = function(e){
         return(NULL)
@@ -194,14 +196,12 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
         sim$habitatSuitabilityIndex[[paste0("Year", time(sim))]] <- raster::raster(file.path(outputPath(sim), fls))
 
       } else {
-        
+
         sim$habitatSuitabilityIndex[[paste0("Year", time(sim))]] <- HSImodelPredict(modelHSI = sim$modelHSI,
                                                                                     modLayers = sim$modLayers[[paste0("Year", time(sim))]],
                                                                                     currentTime = time(sim),
-                                                                                    pathData = dataPath(sim),
                                                                                     pathOut = outputPath(sim))
       }
-      
       # schedule future event(s)
       sim <- scheduleEvent(sim, time(sim) + P(sim)$predictionInterval, "caribouIK", "predictingCaribou")
       if (P(sim)$predictLastYear){
@@ -227,25 +227,12 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
   .inputObjects <- function(sim) {
     
     #cacheTags <- c(currentModule(sim), "function:.inputObjects") ## uncomment this if Cache is being used
-    dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
-    message(currentModule(sim), ": using dataPath '", dPath, "'.")
-    
     cloudFolderID <- "https://drive.google.com/open?id=1PoEkOkg_ixnAdDqqTQcun77nUvkEHDc0"
     dPath <- asPath(getOption("reproducible.destinationPath", dataPath(sim)), 1)
     message(currentModule(sim), ": using dataPath '", dPath, "'.")
     
     cloudFolderID <- "https://drive.google.com/open?id=1PoEkOkg_ixnAdDqqTQcun77nUvkEHDc0"
-    
-    if (!suppliedElsewhere("provinces", sim)){
-      sim$provinces <- "NWT"
-    }
-    if (!suppliedElsewhere("caribouCoefTableRSF", sim)){
-      sim$caribouCoefTableRSF <- prepInputs(targetFile = "caribouIK_ModelCoefficents.csv", 
-                                            url = extractURL("caribouCoefTableRSF"),
-                                            destinationPath = dataPath(sim), fun = "data.table::fread", 
-                                            omitArgs = "destinationPath", overwrite = TRUE)
-    }
-    
+   
     if (!suppliedElsewhere(object = "studyArea", sim = sim)){
       sim$studyArea <- Cache(prepInputs,
                              url = extractURL("studyArea"),
@@ -261,13 +248,7 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
                                  overwrite = TRUE, filename2 = NULL,
                                  omitArgs = c("destinationPath", "cloudFolderID", "useCloud", "overwrite", "filename2"))
     }
-    
-    if (!suppliedElsewhere("adultFemaleSurv", sim)){
-      message(crayon::yellow(paste0("No LPU specific values for the female survival is available for NWT.", 
-                                    "\nUsing national ECCC value of 0.85.")))
-      sim$adultFemaleSurv <- 0.85
-    }
-    
+
     if (!suppliedElsewhere("waterRaster", sim)){
       sim$waterRaster <- Cache(prepInputsLayers_DUCKS, destinationPath = dataPath(sim), 
                                studyArea = sim$studyArea, lccLayer = P(sim)$baseLayer,
@@ -363,16 +344,20 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
     }
     
     if (!suppliedElsewhere("IKLayer", sim = sim, where = "sim")){
-      message(crayon::red("IKLayer was not supplied. Using DUMMY data instead, for testing purposes"))
-      set.seed(1983)
-      randomMap <- SpaDES.tools::gaussMap(x = raster(sim$rasterToMatch), scale = 200, var = 10)
-      randomMap <- round(randomMap[], 0)
-      sim$IKLayer <- postProcess(randomMap, rasterToMatch = sim$rasterToMatch, studyArea = sim$studyArea, 
-                                 filename2 = NULL, destinationPath = dataPath(sim))
-      # Ensuring it bounds between 1 and 10
-      sim$IKLayer[sim$IKLayer > 10] <- 10
-      sim$IKLayer[sim$IKLayer < 1] <- 1
-    }
+      message(crayon::red(paste0("IKLayer was not supplied. Using DUMMY data instead, for testing purposes, for the NWT.",
+                                 " If your studyArea is NOT within the BCR6 in the NWT, this will fail.")))
+      tryCatch({
+        sim$IKLayer <- prepInputs(url = "https://drive.google.com/open?id=10o3r3U9yp26kALofziU9so4w08FzZeWG", 
+                                  destinationPath = Paths$inputPath, rasterToMatch = sim$rasterToMatch,
+                                  studyArea = sim$studyArea)
+        
+      }, error = function(e){
+        sim$IKLayer <- prepInputs(url = "https://drive.google.com/open?id=10o3r3U9yp26kALofziU9so4w08FzZeWG", 
+                                  destinationPath = Paths$inputPath, rasterToMatch = sim$rasterToMatch,
+                                  studyArea = sim$studyArea, overwrite = TRUE)
+        
+      })
+      }
     
     
     return(invisible(sim))
