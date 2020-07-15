@@ -18,7 +18,7 @@ defineModule(sim, list(
   timeunit = "year",
   citation = list("citation.bib"),
   documentation = deparse(list("README.txt", "caribouIK.Rmd")),
-  reqdPkgs = list("data.table", "ggplot2", "PredictiveEcology/pemisc", "tati-micheletti/usefun", "ordinalForest", "PredictiveEcology/LandR"), 
+  reqdPkgs = list("data.table", "ggplot2", "PredictiveEcology/pemisc", "tati-micheletti/usefulFuns", "ordinalForest", "PredictiveEcology/LandR"), 
   parameters = rbind(
     defineParameter("predictLastYear", "logical", TRUE, NA, NA, paste0("If last year of simulation is not multiple of",
                                                                        " predictionInterval, should it predict for the last year too?")),
@@ -64,7 +64,7 @@ defineModule(sim, list(
     expectsInput(objectName = "Vrug", objectClass = "RasterLayer", 
                  desc = "Raster with elevation values", 
                  sourceURL = "https://drive.google.com/open?id=16u07GpGQbBd5Yh8xPZ_xLiUo31OF0uDP"),
-    expectsInput(objectName = "LCC05", objectClass = "RasterLayer", 
+    expectsInput(objectName = "rstLCC", objectClass = "RasterLayer", 
                  desc = "This will give us both shrub and herb layers", 
                  sourceURL = ""),
     expectsInput(objectName = "studyArea", objectClass = "SpatialPolygonDataFrame", 
@@ -102,9 +102,9 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
     eventType,
     init = {
       Require("magrittr")
-      mod$cohortData <- usefun::createModObject(data = "cohortData", sim = sim, 
+      mod$cohortData <- usefulFuns::createModObject(data = "cohortData", sim = sim, 
                                                 pathInput = inputPath(sim), currentTime = start(sim))
-      mod$pixelGroupMap <- usefun::createModObject(data = "pixelGroupMap", sim = sim, 
+      mod$pixelGroupMap <- usefulFuns::createModObject(data = "pixelGroupMap", sim = sim, 
                                                    pathInput = inputPath(sim), currentTime = start(sim))
       
       if (any(is.null(mod$pixelGroupMap), is.null(mod$cohortData))) {
@@ -118,7 +118,7 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
           sim$modLayers <- list()
         }
         
-        sim$modLayers[["Initial"]] <- Cache(usefun::getLayers, currentTime = start(sim),
+        sim$modLayers[["Initial"]] <- Cache(usefulFuns::getLayers, currentTime = start(sim),
                                             startTime = start(sim),
                                             endTime = end(sim),
                                             cohortData = mod$cohortData, # Has age info per pixel group
@@ -133,7 +133,7 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
                                             oldBurnTime = P(sim)$oldBurnTime,
                                             elevation = sim$Elevation,
                                             vrug = sim$Vrug,
-                                            LCC05 = sim$LCC05,
+                                            LCC05 = sim$rstLCC,
                                             reclassLCC05 = sim$reclassLCC05,
                                             rasterToMatch = sim$rasterToMatch,
                                             userTags = c("modLayersInitial", "caribouIK", "getLayers"), 
@@ -155,9 +155,9 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
     },
     gettingData = {
       Require("magrittr")
-      mod$cohortData <- usefun::createModObject(data = "cohortData", sim = sim, 
+      mod$cohortData <- usefulFuns::createModObject(data = "cohortData", sim = sim, 
                                                 pathInput = inputPath(sim), currentTime = time(sim))
-      mod$pixelGroupMap <- usefun::createModObject(data = "pixelGroupMap", sim = sim, 
+      mod$pixelGroupMap <- usefulFuns::createModObject(data = "pixelGroupMap", sim = sim, 
                                                    pathInput = inputPath(sim), currentTime = time(sim))
       
       if (any(is.null(mod$pixelGroupMap), is.null(mod$cohortData))) {
@@ -178,7 +178,7 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
           sim$modLayers <- list()
         }
 
-        sim$modLayers <- usefun::getLayers(currentTime = time(sim),
+        sim$modLayers <- usefulFuns::getLayers(currentTime = time(sim),
                                            startTime = start(sim),
                                            endTime = end(sim),
                                            cohortData = mod$cohortData, # Has age info per pixel group
@@ -193,11 +193,11 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
                                            oldBurnTime = P(sim)$oldBurnTime,
                                            elevation = sim$Elevation,
                                            vrug = sim$Vrug,
-                                           LCC05 = sim$LCC05,
+                                           LCC05 = sim$rstLCC,
                                            reclassLCC05 = sim$reclassLCC05,
                                            rasterToMatch = sim$rasterToMatch)
       }
-      fls <- tryCatch({usefun::grepMulti(x = list.files(outputPath(sim)), patterns = c("IK", time(sim)))}, error = function(e){
+      fls <- tryCatch({usefulFuns::grepMulti(x = list.files(outputPath(sim)), patterns = c("IK", time(sim)))}, error = function(e){
         return(NULL)
       })
       if (all(length(fls) > 0, P(sim)$overwriteResults)) {  # If we have the layers already, we return them if overwriteResults == FALSE
@@ -288,8 +288,8 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
                                     rasterToMatch = sim$rasterToMatch)
     }
     
-    if (!suppliedElsewhere("LCC05", sim)){
-      sim$LCC05 <- LandR::prepInputsLCC(destinationPath = dataPath(sim),
+    if (!suppliedElsewhere("rstLCC", sim)){
+      sim$rstLCC <- LandR::prepInputsLCC(destinationPath = dataPath(sim),
                                         studyArea = sim$studyArea,
                                         rasterToMatch = sim$rasterToMatch)
     }
@@ -348,7 +348,7 @@ doEvent.caribouIK = function(sim, eventTime, eventType) {
       
       forestClasses <- c(1:15, 34:35)
       sim$forestOnly <- sim$rasterToMatch
-      sim$forestOnly[!sim$LCC05[] %in% forestClasses] <- NA
+      sim$forestOnly[!sim$rstLCC[] %in% forestClasses] <- NA
     }
     
     if (!suppliedElsewhere("IKLayer", sim = sim, where = "sim")){
