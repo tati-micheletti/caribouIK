@@ -41,7 +41,7 @@ defineModule(sim, list(
     defineParameter("subsetForModel", "logical | numeric", 50, NA, NA,
                     desc = "Should data for the model be subsetted? If FALSE, existing will be returned")
   ),
-  inputObjects = bind_rows(
+  inputObjects = bindrows(
     expectsInput(objectName = "waterRaster", objectClass = "RasterLayer",
                  desc = "Wetland raster for excluding water from anthropogenic layer",
                  sourceURL = NA),
@@ -80,7 +80,7 @@ defineModule(sim, list(
                  desc = "This can be a raster or a shapefile with rank information on caribou areas", 
                  sourceURL = "")
   ), 
-  outputObjects = bind_rows(
+  outputObjects = bindrows(
     createsOutput(objectName = "modelHSI", objectClass = "", # TODO decide the class here  
                   desc = paste0("Caribou habitat suitability model based on ranks defined by ",
                                 "Indigenous Knowledge, using static (Elevation, Vrug, Shrub, Herb) ",
